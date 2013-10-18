@@ -39,7 +39,7 @@ import javax.swing.event.ListDataListener;
  * Decorator to ListModel, enable filtering
  * @param <SubModel> ListModel implementation
  */
-public class FilteredModel<SubModel extends ListModel> extends AbstractListModel {
+public class FilteredModel<SubModel extends ListModel<ElementType>,ElementType> extends AbstractListModel<ElementType> {
     private SubModel subModel;
     private List<Integer> shownElements = null;      // Filtered (visible) elements
     private ItemFilter<SubModel> elementFilter;
@@ -64,7 +64,7 @@ public class FilteredModel<SubModel extends ListModel> extends AbstractListModel
 
     /**
      * Set the list filter and update the content.
-     * @param elementFilter
+     * @param elementFilter Filter instance
      */
     public void setFilter(ItemFilter<SubModel> elementFilter) {
         if(elementFilter!=null) {
@@ -80,14 +80,14 @@ public class FilteredModel<SubModel extends ListModel> extends AbstractListModel
         }
     }
     @Override
-    public Object getElementAt(int i) {
+    public ElementType getElementAt(int i) {
         if(elementFilter==null) {
             return subModel.getElementAt(i);
         } else {
             if(i>=0 && i<shownElements.size()) {
                 return subModel.getElementAt(shownElements.get(i));
             } else {
-                return false;
+                return null;
             }
         }
     }
@@ -101,7 +101,7 @@ public class FilteredModel<SubModel extends ListModel> extends AbstractListModel
             return;
         }
         if(shownElements==null) {
-            shownElements = new ArrayList<Integer>();
+            shownElements = new ArrayList<>();
         }
         if(oldSize>0) {
             fireIntervalRemoved(this,0,oldSize-1);

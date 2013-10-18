@@ -50,7 +50,7 @@ import org.osgi.framework.Bundle;
 /**
  * @author Nicolas Fortin
  */
-public class BundleListRenderer implements ListCellRenderer {
+public class BundleListRenderer implements ListCellRenderer<BundleItem> {
     private static final Logger LOGGER = Logger.getLogger(BundleListRenderer.class);
     private ListCellRenderer lookAndFeelRenderer;
     private static Dimension bundleIconDimension = new Dimension(32,32);
@@ -137,7 +137,7 @@ public class BundleListRenderer implements ListCellRenderer {
     private ImageIcon getBundleIcon(Bundle bundle) {
         return pathToImage(bundle,getBundleIconPath(bundle.getHeaders().get(ICON_HEADER)));
     }
-    public Component getListCellRendererComponent(JList jList, Object o, int i, boolean b, boolean b2) {
+    public Component getListCellRendererComponent(JList jList, BundleItem o, int i, boolean b, boolean b2) {
         Component lafComp = lookAndFeelRenderer.getListCellRendererComponent(jList,o,i,b,b2);
         if(lafComp instanceof JLabel && o!=null) {
                 try {

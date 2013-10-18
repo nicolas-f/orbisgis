@@ -28,16 +28,16 @@
  */
 package org.orbisgis.omanager.ui;
 
-import java.awt.BorderLayout;
-import java.awt.Dimension;
+import java.awt.*;
 import java.awt.event.ActionListener;
+import java.awt.image.ImageObserver;
 import java.beans.EventHandler;
+import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,32 +45,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.swing.Action;
-import javax.swing.BoxLayout;
-import javax.swing.ButtonGroup;
-import javax.swing.DefaultComboBoxModel;
-import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JComboBox;
-import javax.swing.JFileChooser;
-import javax.swing.JList;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JRadioButton;
-import javax.swing.JScrollPane;
-import javax.swing.JSeparator;
-import javax.swing.JSplitPane;
-import javax.swing.JTextField;
-import javax.swing.JTextPane;
-import javax.swing.ListModel;
-import javax.swing.ListSelectionModel;
-import javax.swing.SwingUtilities;
-import javax.swing.SwingWorker;
+import javax.swing.*;
 import javax.swing.event.DocumentListener;
 import javax.swing.event.ListDataListener;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.plaf.LayerUI;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.SimpleAttributeSet;
@@ -99,17 +80,17 @@ public class MainPanel extends JPanel {
     private static final int PROPERTY_TITLE_SIZE_INCREMENT = 4;
     private static final String DEFAULT_CATEGORY = "OrbisGIS";
     private ItemFilterStatusFactory.Status radioFilterStatus = ItemFilterStatusFactory.Status.ALL;
-    private Map<String,ImageIcon> buttonIcons = new HashMap<String, ImageIcon>();
+    private Map<String,ImageIcon> buttonIcons = new HashMap<>();
 
     // Bundle Category filter
     private JComboBox bundleCategory = new JComboBox();
     private JTextField bundleSearchField = new JTextField(MINIMUM_SEARCH_COLUMNS);
     private JTextPane bundleDetails = new JTextPane();
-    private JList bundleList = new JList();
+    private JList<BundleItem> bundleList = new JList<>();
     private JPanel bundleActions = new JPanel();
     private JButton repositoryRemove;
     private BundleListModel bundleListModel;
-    private FilteredModel<BundleListModel> filterModel;
+    private FilteredModel<BundleListModel,BundleItem > filterModel;
     private JPanel bundleDetailsAndActions = new JPanel(new BorderLayout());
     private JSplitPane splitPane;
     private ActionBundleFactory actionFactory;
@@ -119,6 +100,9 @@ public class MainPanel extends JPanel {
     private ServiceTracker<RepositoryAdmin,RepositoryAdmin> repositoryAdminTracker;
     private AtomicBoolean awaitingFilteringThread = new AtomicBoolean(false);
     private long lastTypedWordInFindTextField = 0;
+    /** Wait label */
+    private final JPanel southButtons = new JPanel();
+    private final ProgressLayerUI layerUI = new ProgressLayerUI();
     /**
      * in ms Launch a search if the user don't type any character within this time.
      */
@@ -129,15 +113,19 @@ public class MainPanel extends JPanel {
      */
     public MainPanel(BundleContext bundleContext) {
         super(new BorderLayout());
+        JPanel subLayer = new JPanel(new BorderLayout());
+        JLayer<JPanel> jlayer = new JLayer<>(subLayer, layerUI);
+        ImageIcon loading = getIcon("loading", "gif");
+        layerUI.setWaitIcon(loading);
+        loading.setImageObserver(layerUI);
         this.bundleContext = bundleContext;
         initRepositoryTracker();
         actionFactory = new ActionBundleFactory(bundleContext,this);
         // Main Panel (South button, center Split Pane)
         // Buttons on south of main panel
-        JPanel southButtons = new JPanel();
         southButtons.setLayout(new BoxLayout(southButtons, BoxLayout.X_AXIS));
         addSouthButtons(southButtons);
-        add(southButtons, BorderLayout.SOUTH);
+        subLayer.add(southButtons, BorderLayout.SOUTH);
         // Right Side of Split Panel, Bundle Description and button action on selected bundle
         bundleActions.setLayout(new BoxLayout(bundleActions,BoxLayout.X_AXIS));
         //bundleDetails.setPreferredSize(DEFAULT_DETAILS_DIMENSION);
@@ -154,9 +142,10 @@ public class MainPanel extends JPanel {
 
         setDefaultDetailsMessage();
         splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,leftOfSplitGroup,bundleDetailsAndActions);
-        add(splitPane);
+        subLayer.add(splitPane);
+        add(jlayer);
         bundleListModel =  new BundleListModel(bundleContext,repositoryAdminTrackerCustomizer);
-        filterModel = new FilteredModel<BundleListModel>(bundleListModel);
+        filterModel = new FilteredModel<>(bundleListModel);
         bundleList.setModel(filterModel);
         bundleListModel.install();
         bundleList.setCellRenderer(new BundleListRenderer(bundleList));
@@ -167,11 +156,22 @@ public class MainPanel extends JPanel {
         applyFilters();
     }
 
+    private void showWait(String message) {
+        layerUI.start();
+    }
+
+    private void hideWait() {
+        layerUI.stop();
+    }
+
     private ImageIcon getIcon(String iconName) {
+        return getIcon(iconName, "png");
+    }
+    private ImageIcon getIcon(String iconName, String ext) {
         ImageIcon icon = buttonIcons.get(iconName);
         if(icon==null) {
             try {
-                icon = new ImageIcon(MainPanel.class.getResource(iconName + ".png"));
+                icon = new ImageIcon(MainPanel.class.getResource(iconName + "." + ext));
                 buttonIcons.put(iconName,icon);
             } catch (Exception ex) {
                 LOGGER.error("Cannot retrieve icon "+iconName,ex);
@@ -426,6 +426,7 @@ public class MainPanel extends JPanel {
      * User click on "Refresh" button.
      */
     public void onReloadPlugins() {
+        showWait(I18N.tr("Reload available plugins from all remote repositories."));
         DownloadOBRProcess reloadAction = new DownloadOBRProcess();
         reloadAction.execute();
     }
@@ -470,13 +471,17 @@ public class MainPanel extends JPanel {
         int returnVal = chooser.showOpenDialog(this);
         if(returnVal == JFileChooser.APPROVE_OPTION) {
             File[] selection = chooser.getSelectedFiles();
-            for(File selected : selection) {
-                try {
-                    LOGGER.info(I18N.tr("Install bundle {0}", selected.toURI().toString()));
-                    bundleContext.installBundle(selected.toURI().toString());
-                } catch (BundleException ex) {
-                    LOGGER.error(ex.getLocalizedMessage(),ex);
+            try {
+                for(File selected : selection) {
+                    try {
+                        showWait(I18N.tr("Install bundle {0}", selected.toURI().toString()));
+                        bundleContext.installBundle(selected.toURI().toString());
+                    } catch (BundleException ex) {
+                        LOGGER.error(ex.getLocalizedMessage(),ex);
+                    }
                 }
+            } finally {
+                hideWait();
             }
         }
 
@@ -642,10 +647,10 @@ public class MainPanel extends JPanel {
         }
     }
     private class DownloadOBRProcess extends SwingWorker {
-
         @Override
         protected Object doInBackground() throws Exception {
             repositoryAdminTrackerCustomizer.refresh();
+            Thread.sleep(5000);
             return null;
         }
 
@@ -656,7 +661,99 @@ public class MainPanel extends JPanel {
 
         @Override
         protected void done() {
+            hideWait();
             bundleListModel.update();
+        }
+    }
+    private static class ProgressLayerUI extends LayerUI<JPanel> implements ImageObserver {
+        private int interpolationCount;
+        private int interpolationMax = 15;
+        private boolean running;
+        private boolean blackInterpolating;
+        private ImageIcon icon;
+
+        /**
+         * @param icon Icon
+         */
+        public void setWaitIcon(ImageIcon icon) {
+            this.icon = icon;
+        }
+
+        @Override
+        public boolean imageUpdate(Image image, int i, int i2, int i3, int i4, int i5) {
+            if (running) {
+                firePropertyChange("interpolationCount", null, interpolationCount);
+                if (blackInterpolating) {
+                    if (--interpolationCount <= 0) {
+                        running = false;
+                    }
+                }
+                else if (interpolationCount < interpolationMax) {
+                    interpolationCount++;
+                }
+            }
+            return running;
+        }
+
+        @Override
+        public void applyPropertyChange(PropertyChangeEvent pce, JLayer l) {
+            if ("interpolationCount".equals(pce.getPropertyName())) {
+                l.repaint();
+            }
+        }
+
+        @Override
+        public void paint (Graphics g, JComponent c) {
+            int w = c.getWidth();
+            int h = c.getHeight();
+            int iconHeight = icon.getIconHeight();
+            int iconWidth = icon.getIconWidth();
+            // Paint the view.
+            super.paint (g, c);
+
+            if (!running) {
+                return;
+            }
+            Graphics2D g2 = (Graphics2D)g.create();
+            float fade = Math.max(0, Math.min(1, (float) interpolationCount / (float) interpolationMax));
+            Composite urComposite = g2.getComposite();
+            // Set alpha
+            g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, .5f * fade));
+            g2.fillRect(0, 0, w, h);
+            g2.drawImage(icon.getImage(), w / 2 - (iconWidth / 2), h / 2 - (iconHeight / 2), this);
+            g2.setComposite(urComposite);
+            g2.dispose();
+        }
+
+        public void start() {
+            if (running) {
+                return;
+            }
+            // Run a thread for animation.
+            running = true;
+            blackInterpolating = false;
+            interpolationCount = 0;
+            firePropertyChange("interpolationCount", null, interpolationCount);
+        }
+
+        public void stop() {
+            blackInterpolating = true;
+        }
+
+        @Override
+        public void installUI(JComponent c) {
+            super.installUI(c);
+            JLayer<?> l = (JLayer<?>) c;
+            // this LayerUI will receive mouse/motion events
+            l.setLayerEventMask(AWTEvent.MOUSE_EVENT_MASK | AWTEvent.MOUSE_MOTION_EVENT_MASK);
+        }
+
+        @Override
+        public void uninstallUI(JComponent c) {
+            super.uninstallUI(c);
+            // JLayer must be returned to its initial state
+            JLayer<?> l = (JLayer<?>) c;
+            l.setLayerEventMask(0);
         }
     }
 }
