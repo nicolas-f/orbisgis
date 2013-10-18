@@ -59,6 +59,7 @@ public class BundleItem {
     private static final Long MEGA = KILO * KILO;
     private static final Long LONG = MEGA * KILO;
     private static final Long TERA = LONG * KILO;
+    private Dictionary<String,String> headers;
 
     /**
      * Constructor
@@ -143,6 +144,7 @@ public class BundleItem {
     public void setBundle(Bundle bundle) {
         if(bundle!=null) {
             this.bundleId = bundle.getBundleId();
+            headers = bundle.getHeaders();
         }
     }
 
@@ -175,8 +177,8 @@ public class BundleItem {
      */
     String getPresentationName() {
         Bundle bundle = getBundle();
-        if(bundle!=null && bundle.getHeaders()!=null) {
-            return bundle.getHeaders().get(Constants.BUNDLE_NAME);
+        if(bundle!=null && headers!=null) {
+            return headers.get(Constants.BUNDLE_NAME);
         } else if(obrResource!=null) {
             return obrResource.getPresentationName();
         } else {
@@ -197,12 +199,8 @@ public class BundleItem {
             return shortDesc;
         }
         String description=null;
-        Bundle bundle = getBundle();
-        if(bundle!=null) {
-            Dictionary<String,String> header = bundle.getHeaders();
-            if(header!=null) {
-                description = bundle.getHeaders().get(Constants.BUNDLE_DESCRIPTION);
-            }
+        if(headers!=null) {
+            description = headers.get(Constants.BUNDLE_DESCRIPTION);
         }
         if(obrResource!=null && obrResource.getProperties()!=null) {
             Object descrObj = obrResource.getProperties().get(Resource.DESCRIPTION);
@@ -237,10 +235,10 @@ public class BundleItem {
      */
     public Map<String,String> getDetails() {
         Bundle bundle = getBundle();
-        if(bundle!=null) {
+        if(headers!=null) {
              // Copy deprecated dictionary into Map
-             Dictionary<String,String> dic = bundle.getHeaders();
-             HashMap<String,String> details = new HashMap<String, String>(dic.size());
+             Dictionary<String,String> dic = headers;
+             HashMap<String,String> details = new HashMap<>(dic.size());
              Enumeration<String> keys = dic.keys();
              while(keys.hasMoreElements()) {
                  String key = keys.nextElement();
@@ -262,7 +260,7 @@ public class BundleItem {
             }
             return details;
         } else {
-            return new HashMap<String, String>();
+            return new HashMap<>();
         }
     }
 
@@ -270,13 +268,12 @@ public class BundleItem {
      * @return Bundle tags
      */
     public Collection<String> getBundleCategories() {
-        Bundle bundle = getBundle();
-        if(bundle!=null) {
-            String categories = bundle.getHeaders().get(Constants.BUNDLE_CATEGORY);
+        if(headers!=null) {
+            String categories = headers.get(Constants.BUNDLE_CATEGORY);
             if(categories!=null) {
                 String[] catArray = categories.split(",");
                 if(catArray.length==1) {
-                    return Arrays.asList(new String[]{categories});
+                    return Arrays.asList(categories);
                 } else {
                     return Arrays.asList(catArray);
                 }
@@ -284,7 +281,7 @@ public class BundleItem {
         } else if(obrResource!=null && obrResource.getCategories()!=null) {
             return Arrays.asList(obrResource.getCategories());
         }
-        return new ArrayList<String>();
+        return new ArrayList<>();
     }
 
     /**
