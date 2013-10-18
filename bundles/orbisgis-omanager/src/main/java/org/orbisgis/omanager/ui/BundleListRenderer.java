@@ -134,8 +134,8 @@ public class BundleListRenderer implements ListCellRenderer<BundleItem> {
         }
         return "";
     }
-    private ImageIcon getBundleIcon(Bundle bundle) {
-        return pathToImage(bundle,getBundleIconPath(bundle.getHeaders().get(ICON_HEADER)));
+    private ImageIcon getBundleIcon(Bundle bundle, BundleItem item) {
+        return pathToImage(bundle,getBundleIconPath(item.getDetails().get(ICON_HEADER)));
     }
     public Component getListCellRendererComponent(JList jList, BundleItem o, int i, boolean b, boolean b2) {
         Component lafComp = lookAndFeelRenderer.getListCellRendererComponent(jList,o,i,b,b2);
@@ -148,7 +148,7 @@ public class BundleListRenderer implements ListCellRenderer<BundleItem> {
                     if(bi.getBundle()!=null) {
                         Bundle bundle = bi.getBundle();
                             try {
-                                ImageIcon customBundleImage = getBundleIcon(bundle);
+                                ImageIcon customBundleImage = getBundleIcon(bundle, o);
                                 if(customBundleImage!=null) {
                                     bundleImage = customBundleImage;
                                 }

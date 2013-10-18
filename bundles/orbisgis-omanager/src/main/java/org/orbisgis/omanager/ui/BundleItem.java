@@ -234,7 +234,6 @@ public class BundleItem {
      * @return A map of bundle details to show on the right side of the GUI. (Title->Value)
      */
     public Map<String,String> getDetails() {
-        Bundle bundle = getBundle();
         if(headers!=null) {
              // Copy deprecated dictionary into Map
              Dictionary<String,String> dic = headers;
