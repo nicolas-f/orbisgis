@@ -30,6 +30,7 @@ package org.orbisgis.omanager.ui;
 
 import java.awt.*;
 import java.awt.event.ActionListener;
+import java.awt.geom.Rectangle2D;
 import java.awt.image.ImageObserver;
 import java.beans.EventHandler;
 import java.beans.PropertyChangeEvent;
@@ -157,6 +158,7 @@ public class MainPanel extends JPanel {
     }
 
     private void showWait(String message) {
+        layerUI.setMessage(message);
         layerUI.start();
     }
 
@@ -673,6 +675,9 @@ public class MainPanel extends JPanel {
         private boolean blackInterpolating;
         private ImageIcon icon;
         private static final float LAYER_OPACITY = 0.5f;
+        private String message;
+        private Font messageFont;
+
 
         /**
          * @param icon Icon
@@ -726,7 +731,13 @@ public class MainPanel extends JPanel {
             // Set black background
             g2.fillRect(0, 0, w, h);
             // Draw gif
-            g2.drawImage(icon.getImage(), w / 2 - (iconWidth / 2), h / 2 - (iconHeight / 2), this);
+            g2.drawImage(icon.getImage(), (int)(w / 2.f - (iconWidth / 2.f)), (int)(h / 2.f - (iconHeight / 2.f)), this);
+            // Draw message
+            g2.setFont(messageFont);
+            FontMetrics fm = g2.getFontMetrics();
+            Rectangle2D textSize = fm.getStringBounds(message, g2);
+            g2.setColor(Color.WHITE);
+            g2.drawString(message, (int)(( w / 2.f ) - (textSize.getWidth() / 2.f)), (int)(h / 2 + iconHeight / 2 + textSize.getHeight()));
             g2.setComposite(urComposite);
             g2.dispose();
             interpolationDrawn = interpolationCount;
@@ -753,6 +764,7 @@ public class MainPanel extends JPanel {
             JLayer<?> l = (JLayer<?>) c;
             // this LayerUI will receive mouse/motion events
             l.setLayerEventMask(AWTEvent.MOUSE_EVENT_MASK | AWTEvent.MOUSE_MOTION_EVENT_MASK);
+            messageFont = new JLabel().getFont().deriveFont(Font.BOLD);
         }
 
         @Override
@@ -761,6 +773,13 @@ public class MainPanel extends JPanel {
             // JLayer must be returned to its initial state
             JLayer<?> l = (JLayer<?>) c;
             l.setLayerEventMask(0);
+        }
+
+        /**
+         * @param message Shown message
+         */
+        private void setMessage(String message) {
+            this.message = message;
         }
     }
 }
