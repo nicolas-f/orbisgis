@@ -84,7 +84,7 @@ public class MainPanel extends JPanel {
     private Map<String,ImageIcon> buttonIcons = new HashMap<>();
 
     // Bundle Category filter
-    private JComboBox bundleCategory = new JComboBox();
+    private JComboBox<String> bundleCategory = new JComboBox<>();
     private JTextField bundleSearchField = new JTextField(MINIMUM_SEARCH_COLUMNS);
     private JTextPane bundleDetails = new JTextPane();
     private JList<BundleItem> bundleList = new JList<>();
@@ -101,8 +101,6 @@ public class MainPanel extends JPanel {
     private ServiceTracker<RepositoryAdmin,RepositoryAdmin> repositoryAdminTracker;
     private AtomicBoolean awaitingFilteringThread = new AtomicBoolean(false);
     private long lastTypedWordInFindTextField = 0;
-    /** Wait label */
-    private final JPanel southButtons = new JPanel();
     private final ProgressLayerUI layerUI = new ProgressLayerUI();
     /**
      * in ms Launch a search if the user don't type any character within this time.
@@ -118,12 +116,13 @@ public class MainPanel extends JPanel {
         JLayer<JPanel> jlayer = new JLayer<>(subLayer, layerUI);
         ImageIcon loading = getIcon("loading", "gif");
         layerUI.setWaitIcon(loading);
-        loading.setImageObserver(layerUI);
         this.bundleContext = bundleContext;
         initRepositoryTracker();
-        actionFactory = new ActionBundleFactory(bundleContext,this);
+        actionFactory = new ActionBundleFactory(bundleContext,this, layerUI);
         // Main Panel (South button, center Split Pane)
         // Buttons on south of main panel
+        /* Wait label */
+        JPanel southButtons = new JPanel();
         southButtons.setLayout(new BoxLayout(southButtons, BoxLayout.X_AXIS));
         addSouthButtons(southButtons);
         subLayer.add(southButtons, BorderLayout.SOUTH);
@@ -153,7 +152,11 @@ public class MainPanel extends JPanel {
         bundleList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         bundleList.addListSelectionListener(EventHandler.create(ListSelectionListener.class,this,"onBundleSelectionChange",""));
         bundleList.getModel().addListDataListener(EventHandler.create(ListDataListener.class,this,"onListUpdate"));
-        onListUpdate();
+        try {
+            onListUpdate();
+        } catch (InterruptedException ex) {
+            LOGGER.error(ex.getLocalizedMessage(), ex);
+        }
         applyFilters();
     }
 
@@ -201,9 +204,8 @@ public class MainPanel extends JPanel {
         }
     }
     private void readSelectedBundle() {
-        Object selected = bundleList.getSelectedValue();
-        if(selected instanceof BundleItem) {
-            final BundleItem selectedItem = (BundleItem)selected;
+        final BundleItem selectedItem = bundleList.getSelectedValue();
+        if(selectedItem != null) {
             if(!SwingUtilities.isEventDispatchThread()) {
                 SwingUtilities.invokeLater(new Runnable() {
                     public void run() {
@@ -230,45 +232,54 @@ public class MainPanel extends JPanel {
     /**
      * The Data Model of the Bundle list has been updated.
      */
-    public void onListUpdate() {
+    public void onListUpdate() throws InterruptedException {
+        if(!SwingUtilities.isEventDispatchThread()) {
+            // Do not refresh bundle list while doing things in background
+            // Avoid Apache Felix DeadLock on swing thread
+            return;
+        }
         Object oldValue = bundleCategory.getSelectedItem();
         readSelectedBundle();
-        DefaultComboBoxModel model = new DefaultComboBoxModel();
+        DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
         // Update the list of categories
         Set<String> categories = new HashSet<String>();
         int size = bundleList.getModel().getSize();
-        ListModel listModel = bundleList.getModel();
+        ListModel<BundleItem> listModel = bundleList.getModel();
         for(int i=0; i<size; i++) {
-            categories.addAll(((BundleItem) listModel.getElementAt(i)).getBundleCategories());
+            BundleItem item = listModel.getElementAt(i);
+            if(item != null) {
+                categories.addAll(item.getBundleCategories());
+            }
         }
         if(!categories.contains(DEFAULT_CATEGORY)) {
             categories.add(DEFAULT_CATEGORY);
         }
         model.addElement(I18N.tr("All"));
-        List<String> sortedCategories = new ArrayList<String>(categories);
+        List<String> sortedCategories = new ArrayList<>(categories);
         Collections.sort(sortedCategories,String.CASE_INSENSITIVE_ORDER);
         String selectedValue= DEFAULT_CATEGORY;
         if(oldValue instanceof String) {
             selectedValue = (String)oldValue;
         }
         for(String category : sortedCategories) {
-            model.addElement(category);
+            model.addElement(category.trim());
             if(category.equalsIgnoreCase(selectedValue)) {
-                model.setSelectedItem(category);
+                model.setSelectedItem(category.trim());
             }
         }
         bundleCategory.setModel(model);
     }
     private void addSouthButtons(JPanel southButtons) {
-
-        JButton addFile = new ButtonIcon(getIcon("install_plugin_from_disk"));
-        addFile.setToolTipText(I18N.tr("Add a plugin from disk. Dependencies are not automatically resolved."));
-        addFile.addActionListener(EventHandler.create(ActionListener.class, this, "onAddBundleJar"));
+        JButton addFile = new ButtonIcon(new ActionBundle("",
+                I18N.tr("Add a plugin from disk. Dependencies are not automatically resolved."),
+                getIcon("install_plugin_from_disk"), layerUI )
+                .setActionListener(EventHandler.create(ActionListener.class, this, "onAddBundleJar")));
         southButtons.add(addFile);
 
-        JButton addUrl = new ButtonIcon(getIcon("install_plugin_from_url"));
-        addUrl.setToolTipText(I18N.tr("Add a plugin from a URL (file:// or http(s)://). Dependencies are not automatically resolved."));
-        addUrl.addActionListener(EventHandler.create(ActionListener.class,this,"onAddBundleJarUri"));
+        JButton addUrl = new ButtonIcon(new ActionBundle(""
+                ,I18N.tr("Add a plugin from a URL (file:// or http(s)://). Dependencies are not automatically resolved."),
+                getIcon("install_plugin_from_url"),layerUI )
+                .setActionListener(EventHandler.create(ActionListener.class,this,"onAddBundleJarUri")));
         southButtons.add(addUrl);
 
         southButtons.add(new JSeparator(JSeparator.VERTICAL));
@@ -464,7 +475,7 @@ public class MainPanel extends JPanel {
     /**
      * User click on install Plug-in from disk button.
      */
-    public void onAddBundleJar() {
+    public void onAddBundleJar() throws InterruptedException {
         JFileChooser chooser = new JFileChooser();
         chooser.setMultiSelectionEnabled(true);
         FileNameExtensionFilter filter = new FileNameExtensionFilter(
@@ -652,7 +663,6 @@ public class MainPanel extends JPanel {
         @Override
         protected Object doInBackground() throws Exception {
             repositoryAdminTrackerCustomizer.refresh();
-            Thread.sleep(5000);
             return null;
         }
 
@@ -665,121 +675,6 @@ public class MainPanel extends JPanel {
         protected void done() {
             hideWait();
             bundleListModel.update();
-        }
-    }
-    private static class ProgressLayerUI extends LayerUI<JPanel> implements ImageObserver {
-        private int interpolationCount;
-        private int interpolationMax = 15;
-        private int interpolationDrawn;
-        private boolean running;
-        private boolean blackInterpolating;
-        private ImageIcon icon;
-        private static final float LAYER_OPACITY = 0.5f;
-        private String message;
-        private Font messageFont;
-
-
-        /**
-         * @param icon Icon
-         */
-        public void setWaitIcon(ImageIcon icon) {
-            this.icon = icon;
-        }
-
-        @Override
-        public boolean imageUpdate(Image image, int i, int i2, int i3, int i4, int i5) {
-            if (running) {
-                firePropertyChange("interpolationCount", null, interpolationCount);
-                if (blackInterpolating && interpolationDrawn == interpolationCount) {
-                    if (--interpolationCount <= 0) {
-                        running = false;
-                    }
-                }
-                else if (interpolationCount < interpolationMax) {
-                    if(interpolationDrawn == interpolationCount) {
-                        interpolationCount++;
-                    }
-                }
-            }
-            return running;
-        }
-
-        @Override
-        public void applyPropertyChange(PropertyChangeEvent pce, JLayer l) {
-            if ("interpolationCount".equals(pce.getPropertyName())) {
-                l.repaint();
-            }
-        }
-
-        @Override
-        public void paint (Graphics g, JComponent c) {
-            int w = c.getWidth();
-            int h = c.getHeight();
-            int iconHeight = icon.getIconHeight();
-            int iconWidth = icon.getIconWidth();
-            // Paint the view.
-            super.paint (g, c);
-
-            if (!running) {
-                return;
-            }
-            Graphics2D g2 = (Graphics2D)g.create();
-            float fade = Math.max(0, Math.min(1, (float) interpolationCount / (float) interpolationMax));
-            Composite urComposite = g2.getComposite();
-            // Set alpha
-            g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, LAYER_OPACITY * fade));
-            // Set black background
-            g2.fillRect(0, 0, w, h);
-            // Draw gif
-            g2.drawImage(icon.getImage(), (int)(w / 2.f - (iconWidth / 2.f)), (int)(h / 2.f - (iconHeight / 2.f)), this);
-            // Draw message
-            g2.setFont(messageFont);
-            FontMetrics fm = g2.getFontMetrics();
-            Rectangle2D textSize = fm.getStringBounds(message, g2);
-            g2.setColor(Color.WHITE);
-            g2.drawString(message, (int)(( w / 2.f ) - (textSize.getWidth() / 2.f)), (int)(h / 2 + iconHeight / 2 + textSize.getHeight()));
-            g2.setComposite(urComposite);
-            g2.dispose();
-            interpolationDrawn = interpolationCount;
-        }
-
-        public void start() {
-            if (running) {
-                return;
-            }
-            // Run a thread for animation.
-            running = true;
-            blackInterpolating = false;
-            interpolationCount = 0;
-            firePropertyChange("interpolationCount", null, interpolationCount);
-        }
-
-        public void stop() {
-            blackInterpolating = true;
-        }
-
-        @Override
-        public void installUI(JComponent c) {
-            super.installUI(c);
-            JLayer<?> l = (JLayer<?>) c;
-            // this LayerUI will receive mouse/motion events
-            l.setLayerEventMask(AWTEvent.MOUSE_EVENT_MASK | AWTEvent.MOUSE_MOTION_EVENT_MASK);
-            messageFont = new JLabel().getFont().deriveFont(Font.BOLD);
-        }
-
-        @Override
-        public void uninstallUI(JComponent c) {
-            super.uninstallUI(c);
-            // JLayer must be returned to its initial state
-            JLayer<?> l = (JLayer<?>) c;
-            l.setLayerEventMask(0);
-        }
-
-        /**
-         * @param message Shown message
-         */
-        private void setMessage(String message) {
-            this.message = message;
         }
     }
 }

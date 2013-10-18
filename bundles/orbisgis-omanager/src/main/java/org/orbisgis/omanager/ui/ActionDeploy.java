@@ -54,8 +54,8 @@ public class ActionDeploy  extends ActionBundle {
     private BundleContext bundleContext;
     private Component frame;
 
-    public ActionDeploy(String label, String toolTipText, boolean start, Resource resource,BundleContext bundleContext,Component frame,Icon icon) {
-        super(label, toolTipText, icon);
+    public ActionDeploy(String label, String toolTipText, boolean start, Resource resource,BundleContext bundleContext,Component frame,Icon icon,  ProgressLayerUI progressLayerUI) {
+        super(label, toolTipText, icon, progressLayerUI);
         this.start = start;
         this.resource = resource;
         this.bundleContext = bundleContext;

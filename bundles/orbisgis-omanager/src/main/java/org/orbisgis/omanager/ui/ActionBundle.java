@@ -31,9 +31,8 @@ package org.orbisgis.omanager.ui;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import javax.swing.AbstractAction;
-import javax.swing.Icon;
-import javax.swing.SwingWorker;
+import javax.swing.*;
+
 import org.apache.log4j.Logger;
 
 /**
@@ -42,10 +41,12 @@ import org.apache.log4j.Logger;
  */
 public class ActionBundle extends AbstractAction {
     protected static Logger LOGGER = Logger.getLogger(ActionBundle.class);
+    private ProgressLayerUI progressLayerUI;
     private ActionListener action;
 
-    public ActionBundle(String label, String toolTipText,Icon icon) {
+    public ActionBundle(String label, String toolTipText,Icon icon, ProgressLayerUI progressLayerUI) {
         super(label);
+        this.progressLayerUI = progressLayerUI;
         putValue(SHORT_DESCRIPTION,toolTipText);
         putValue(SMALL_ICON, icon);
     }
@@ -61,8 +62,31 @@ public class ActionBundle extends AbstractAction {
     }
 
     public void actionPerformed(ActionEvent actionEvent) {
-        // If this is done outside the SwingEventThread then a thread lock can occur
-        action.actionPerformed(actionEvent);
+        progressLayerUI.setMessage((String)getValue(SHORT_DESCRIPTION));
+        progressLayerUI.start();
+        ActionSwingWorker actionSwingWorker = new ActionSwingWorker(action, actionEvent, progressLayerUI);
+        actionSwingWorker.execute();
     }
+    private static class ActionSwingWorker extends SwingWorker {
+        private ActionEvent actionEvent;
+        private ActionListener action;
+        private ProgressLayerUI progressLayerUI;
 
+        private ActionSwingWorker(ActionListener action, ActionEvent actionEvent, ProgressLayerUI progressLayerUI) {
+            this.action = action;
+            this.actionEvent = actionEvent;
+            this.progressLayerUI = progressLayerUI;
+        }
+
+        @Override
+        protected Object doInBackground() throws Exception {
+            action.actionPerformed(actionEvent);
+            return 0;
+        }
+
+        @Override
+        protected void done() {
+            progressLayerUI.stop();
+        }
+    }
 }
