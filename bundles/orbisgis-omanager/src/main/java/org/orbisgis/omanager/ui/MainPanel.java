@@ -668,9 +668,11 @@ public class MainPanel extends JPanel {
     private static class ProgressLayerUI extends LayerUI<JPanel> implements ImageObserver {
         private int interpolationCount;
         private int interpolationMax = 15;
+        private int interpolationDrawn;
         private boolean running;
         private boolean blackInterpolating;
         private ImageIcon icon;
+        private static final float LAYER_OPACITY = 0.5f;
 
         /**
          * @param icon Icon
@@ -683,13 +685,15 @@ public class MainPanel extends JPanel {
         public boolean imageUpdate(Image image, int i, int i2, int i3, int i4, int i5) {
             if (running) {
                 firePropertyChange("interpolationCount", null, interpolationCount);
-                if (blackInterpolating) {
+                if (blackInterpolating && interpolationDrawn == interpolationCount) {
                     if (--interpolationCount <= 0) {
                         running = false;
                     }
                 }
                 else if (interpolationCount < interpolationMax) {
-                    interpolationCount++;
+                    if(interpolationDrawn == interpolationCount) {
+                        interpolationCount++;
+                    }
                 }
             }
             return running;
@@ -718,11 +722,14 @@ public class MainPanel extends JPanel {
             float fade = Math.max(0, Math.min(1, (float) interpolationCount / (float) interpolationMax));
             Composite urComposite = g2.getComposite();
             // Set alpha
-            g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, .5f * fade));
+            g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, LAYER_OPACITY * fade));
+            // Set black background
             g2.fillRect(0, 0, w, h);
+            // Draw gif
             g2.drawImage(icon.getImage(), w / 2 - (iconWidth / 2), h / 2 - (iconHeight / 2), this);
             g2.setComposite(urComposite);
             g2.dispose();
+            interpolationDrawn = interpolationCount;
         }
 
         public void start() {
