@@ -77,8 +77,6 @@ public class MainPanel extends JPanel {
     private static final I18n I18N = I18nFactory.getI18n(MainPanel.class);
     private static final Logger LOGGER = Logger.getLogger("gui."+MainPanel.class);
     private static final int BORDER_PIXEL_GAP = 2;
-    private static final int PROPERTY_TEXT_SIZE_INCREMENT = 3;
-    private static final int PROPERTY_TITLE_SIZE_INCREMENT = 4;
     private static final String DEFAULT_CATEGORY = "OrbisGIS";
     private ItemFilterStatusFactory.Status radioFilterStatus = ItemFilterStatusFactory.Status.ALL;
     private Map<String,ImageIcon> buttonIcons = new HashMap<>();
@@ -86,7 +84,7 @@ public class MainPanel extends JPanel {
     // Bundle Category filter
     private JComboBox<String> bundleCategory = new JComboBox<>();
     private JTextField bundleSearchField = new JTextField(MINIMUM_SEARCH_COLUMNS);
-    private JTextPane bundleDetails = new JTextPane();
+    private BundleDetailsPanel bundleDetails = new BundleDetailsPanel();
     private JList<BundleItem> bundleList = new JList<>();
     private JPanel bundleActions = new JPanel();
     private JButton repositoryRemove;
@@ -95,7 +93,6 @@ public class MainPanel extends JPanel {
     private JPanel bundleDetailsAndActions = new JPanel(new BorderLayout());
     private JSplitPane splitPane;
     private ActionBundleFactory actionFactory;
-    private BundleDetailsTransformer bundleHeader = new BundleDetailsTransformer();
     private BundleContext bundleContext;
     private RepositoryAdminTracker repositoryAdminTrackerCustomizer;
     private ServiceTracker<RepositoryAdmin,RepositoryAdmin> repositoryAdminTracker;
@@ -129,9 +126,8 @@ public class MainPanel extends JPanel {
         // Right Side of Split Panel, Bundle Description and button action on selected bundle
         bundleActions.setLayout(new BoxLayout(bundleActions,BoxLayout.X_AXIS));
         //bundleDetails.setPreferredSize(DEFAULT_DETAILS_DIMENSION);
-        bundleDetails.setEditable(false);
         bundleDetails.setMinimumSize(MINIMUM_BUNDLE_DESCRIPTION_DIMENSION);
-        bundleDetailsAndActions.add(new JScrollPane(bundleDetails),BorderLayout.CENTER);
+        bundleDetailsAndActions.add(bundleDetails,BorderLayout.CENTER);
         bundleDetailsAndActions.add(bundleActions,BorderLayout.SOUTH);
         // Left Side of Split Panel (Filters north, bundles center)
         JPanel leftOfSplitGroup = new JPanel(new BorderLayout(BORDER_PIXEL_GAP,BORDER_PIXEL_GAP));
@@ -158,6 +154,7 @@ public class MainPanel extends JPanel {
             LOGGER.error(ex.getLocalizedMessage(), ex);
         }
         applyFilters();
+        bundleDetails.init();
     }
 
     private void showWait(String message) {
@@ -306,66 +303,11 @@ public class MainPanel extends JPanel {
         bundleActions.removeAll();
         bundleDetailsAndActions.setVisible(false);
     }
-    private void addDescriptionItem(String propertyKey,String propertyValue ,Document document) {
-        addDescriptionItem(propertyKey, propertyValue, document, PROPERTY_TEXT_SIZE_INCREMENT);
-    }
-    private void addDescriptionItem(String propertyKey,String propertyValue ,Document document, int keySize) {
-        try {
-            SimpleAttributeSet sc = new SimpleAttributeSet();
-            sc.addAttribute(StyleConstants.CharacterConstants.Bold, Boolean.TRUE);
-            int standardSize = StyleConstants.CharacterConstants.getFontSize(sc);
-            sc.addAttribute(StyleConstants.CharacterConstants.Size, standardSize + keySize);
-            document.insertString(document.getLength(), propertyKey, sc);
-            if(!propertyValue.isEmpty()) {
-                document.insertString(document.getLength()," : "+propertyValue+"\n\n",new SimpleAttributeSet());
-            } else {
-                document.insertString(document.getLength(),"\n"+propertyValue+"\n\n",new SimpleAttributeSet());
-            }
-        } catch (BadLocationException ex) {
-            LOGGER.error(ex);
-        }
-    }
-    private void addHeaderItem(String property,Map<String,String> headers, Document document) {
-        String value = headers.get(property);
-        if(value!=null) {
-            addDescriptionItem(I18N.tr(property),value,document);
-        }
-    }
 
     private void setBundleDetailsAndActions(BundleItem selectedItem) {
         bundleActions.removeAll();
         // Set description
-        bundleDetails.setText("");
-        Document document = bundleDetails.getDocument();
-        Map<String,String> itemDetails = selectedItem.getDetails();
-        // Plugin Name
-        // Title, Description, Version, Category, then other parameters
-        addDescriptionItem(selectedItem.getPresentationName(),"",document,PROPERTY_TITLE_SIZE_INCREMENT);
-        // Description
-        addHeaderItem(Constants.BUNDLE_DESCRIPTION, itemDetails, document);
-        // Version
-        addHeaderItem(Constants.BUNDLE_VERSION, itemDetails, document);
-        // Categories
-        StringBuilder cat = new StringBuilder();
-        for(String category : selectedItem.getBundleCategories()) {
-            if(cat.length()>0) {
-                cat.append(", ");
-            }
-            cat.append(I18N.tr(category.trim()));
-        }
-        if(cat.length()>0) {
-            addDescriptionItem(I18N.tr(Constants.BUNDLE_CATEGORY),cat.toString(),document);
-        }
-
-        // Add other properties
-        for(Map.Entry<String,String> entry : itemDetails.entrySet()) {
-            String originalKey = entry.getKey();
-            String key = bundleHeader.convert(originalKey);
-            if(!key.isEmpty() && !entry.getValue().isEmpty()) {
-                addDescriptionItem(key,entry.getValue(),document);
-            }
-        }
-        bundleDetails.setCaretPosition(0); // Got to the beginning of the document
+        bundleDetails.loadBundleItem(selectedItem);
         // Set buttons
         List<Action> actions = actionFactory.create(selectedItem);
         for(Action action : actions) {

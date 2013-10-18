@@ -73,6 +73,7 @@ public class BundleDetailsTransformer {
         I18n.marktr("Bundle-SymbolicName");
         I18n.marktr("Bundle-UpdateLocation");
         I18n.marktr("Bundle-Vendor");
+        I18n.marktr("Bnd-LastModified");
         excludeKeys.add(I18n.marktr("Bundle-Version"));
 
         // Categories

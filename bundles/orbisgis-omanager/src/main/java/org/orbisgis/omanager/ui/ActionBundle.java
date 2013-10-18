@@ -62,31 +62,36 @@ public class ActionBundle extends AbstractAction {
     }
 
     public void actionPerformed(ActionEvent actionEvent) {
+        setEnabled(false);
         progressLayerUI.setMessage((String)getValue(SHORT_DESCRIPTION));
         progressLayerUI.start();
-        ActionSwingWorker actionSwingWorker = new ActionSwingWorker(action, actionEvent, progressLayerUI);
+        ActionSwingWorker actionSwingWorker = new ActionSwingWorker(this, actionEvent,action, progressLayerUI);
         actionSwingWorker.execute();
     }
+
     private static class ActionSwingWorker extends SwingWorker {
         private ActionEvent actionEvent;
-        private ActionListener action;
         private ProgressLayerUI progressLayerUI;
+        private Action action;
+        private ActionListener actionListener;
 
-        private ActionSwingWorker(ActionListener action, ActionEvent actionEvent, ProgressLayerUI progressLayerUI) {
+        private ActionSwingWorker(Action action, ActionEvent actionEvent, ActionListener actionListener, ProgressLayerUI progressLayerUI) {
             this.action = action;
             this.actionEvent = actionEvent;
+            this.actionListener = actionListener;
             this.progressLayerUI = progressLayerUI;
         }
 
         @Override
         protected Object doInBackground() throws Exception {
-            action.actionPerformed(actionEvent);
+            actionListener.actionPerformed(actionEvent);
             return 0;
         }
 
         @Override
         protected void done() {
             progressLayerUI.stop();
+            action.setEnabled(true);
         }
     }
 }
