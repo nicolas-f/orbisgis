@@ -62,6 +62,11 @@ public class SQLCompletionProviderTest {
 
         List completions = autoComplete.getCompletionsAtIndex(rSyntaxTextArea, 41);
         assertEquals(1, completions.size());
-        assertEquals("TABLE", ((Completion)completions.get(0)).getReplacementText());
+        assertEquals("TABLE ", ((Completion)completions.get(0)).getReplacementText());
+
+        assertEquals("ta", autoComplete.getAlreadyEnteredText(rSyntaxTextArea));
+        rSyntaxTextArea.setText("select the_geom,dim");
+        rSyntaxTextArea.setCaretPosition(rSyntaxTextArea.getDocument().getLength());
+        assertEquals("dim", autoComplete.getAlreadyEnteredText(rSyntaxTextArea));
     }
 }

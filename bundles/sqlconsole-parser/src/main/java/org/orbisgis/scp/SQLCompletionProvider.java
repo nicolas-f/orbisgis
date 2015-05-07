@@ -36,17 +36,22 @@ import java.io.InputStreamReader;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import javax.swing.SwingWorker;
+import javax.swing.text.BadLocationException;
 import javax.swing.text.JTextComponent;
 
 import org.fife.ui.autocomplete.BasicCompletion;
@@ -78,9 +83,14 @@ public class SQLCompletionProvider extends CompletionProviderBase {
     private long lastUpdate = 0;
     private UpdateParserThread fetchingParser = null;
     private final static Pattern LTRIM = Pattern.compile("^\\s+");
+    // Maximum word length for auto complete
+    private final static int FETCH_ALREADY_ENTERED_TEXT = 30;
+    private Pattern lastWordPattern = Pattern.compile("(\\w+)$");
+    private final Set<String> ignoreToken = new HashSet<>(Arrays.asList("."));
 
     public SQLCompletionProvider(DataSource dataSource, boolean immediateInit) {
         this.dataSource = dataSource;
+        setParameterizedCompletionParams('(', ", ", ')');
         try {
             // Use h2 internal grammar
             updateParser(dataSource, immediateInit);
@@ -124,7 +134,20 @@ public class SQLCompletionProvider extends CompletionProviderBase {
 
     @Override
     public String getAlreadyEnteredText(JTextComponent jTextComponent) {
-        return "";
+        int cursorPos = jTextComponent.getCaretPosition();
+        int fetchLength = cursorPos - FETCH_ALREADY_ENTERED_TEXT < 0 ? cursorPos : FETCH_ALREADY_ENTERED_TEXT;
+        try {
+            String words = jTextComponent.getText(Math.max(0, cursorPos - FETCH_ALREADY_ENTERED_TEXT), fetchLength);
+            Matcher m = lastWordPattern.matcher(words);
+            if(m.find()) {
+                return m.group(m.groupCount() - 1);
+            } else {
+                return "";
+            }
+        } catch (BadLocationException ex) {
+            log.error(ex.getLocalizedMessage(), ex);
+            return "";
+        }
     }
 
 
@@ -155,14 +178,16 @@ public class SQLCompletionProvider extends CompletionProviderBase {
         }
         // Last word for filtering results
         int completionPosition = charIndex - documentReader.getPosition();
-        String partialStatement = LTRIM.matcher(statement.substring(0, completionPosition)).replaceAll("");
+        String partialStatement = LTRIM.matcher(statement.substring(0, Math.min(statement.length(), completionPosition))).replaceAll("");
         // Ask parser for completion list
         // Left trim the string
         Map<String,String> autoComplete = parser.getNextTokenList(partialStatement);
         for(Map.Entry<String, String> entry : autoComplete.entrySet()) {
             String token =  entry.getKey().substring(entry.getKey().indexOf("#") + 1);
-            Completion completion = new BnfAutoCompletion(this, token, entry.getValue());
-            completionList.add(completion);
+            if(!ignoreToken.contains(entry.getValue().toLowerCase())) {
+                Completion completion = new BnfAutoCompletion(this, token + " ", entry.getValue() + " ");
+                completionList.add(completion);
+            }
         }
 
         // Update table list if it has not be done more than UPDATE_INTERVAL ms ago

@@ -87,6 +87,8 @@ public class SQLLanguageSupport extends AbstractLanguageSupport {
                         // install auto-completion
                         sqlCompletionProvider = new SQLCompletionProvider(dataSource, false);
                         AutoCompletion autoCompletion = createAutoCompletion(sqlCompletionProvider);
+                        autoCompletion.setAutoCompleteSingleChoices(true);
+                        autoCompletion.setShowDescWindow(true);
                         autoCompletion.install(textArea);
                         installImpl(textArea, autoCompletion);
                 } catch (SQLException ex) {
