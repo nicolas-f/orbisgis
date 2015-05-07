@@ -184,8 +184,14 @@ public class SQLCompletionProvider extends CompletionProviderBase {
         Map<String,String> autoComplete = parser.getNextTokenList(partialStatement);
         for(Map.Entry<String, String> entry : autoComplete.entrySet()) {
             String token =  entry.getKey().substring(entry.getKey().indexOf("#") + 1);
+            int category = Integer.valueOf(entry.getKey().substring(0, 1));
             if(!ignoreToken.contains(entry.getValue().toLowerCase())) {
-                Completion completion = new BnfAutoCompletion(this, token + " ", entry.getValue() + " ");
+                Completion completion;
+                if(category == Sentence.FUNCTION) {
+                    completion = new BnfAutoCompletionFunction(this, token + " ", entry.getValue() + " ", dataSource);
+                } else {
+                    completion = new BnfAutoCompletion(this, token + " ", entry.getValue() + " ");
+                }
                 completionList.add(completion);
             }
         }
@@ -229,6 +235,21 @@ public class SQLCompletionProvider extends CompletionProviderBase {
         public String getAlreadyEntered(JTextComponent comp) {
             String completeToken = getReplacementText();
             return completeToken.substring(0, completeToken.length() - append.length());
+        }
+    }
+
+    private static class BnfAutoCompletionFunction extends BnfAutoCompletion {
+        private DataSource dataSource;
+
+        public BnfAutoCompletionFunction(CompletionProvider provider, String completeToken, String append, DataSource
+                dataSource) {
+            super(provider, completeToken, append);
+            this.dataSource = dataSource;
+        }
+
+        @Override
+        public String toString() {
+            return getReplacementText()+"( GEOMETRY )";
         }
     }
 

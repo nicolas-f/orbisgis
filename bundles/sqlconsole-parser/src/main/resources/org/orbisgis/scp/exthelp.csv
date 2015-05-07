@@ -594,7 +594,7 @@ Optional parameters for CSVREAD and CSVWRITE."
 intType | booleanType | tinyintType | smallintType | bigintType | identityType
     | decimalType | doubleType | realType | dateType | timeType | timestampType
     | binaryType | otherType | varcharType | varcharIgnorecaseType | charType
-    | blobType | clobType | uuidType | arrayType
+    | blobType | clobType | uuidType | arrayType | geometryType
 ","
 A data type definition."
 "Other Grammar","Date","
