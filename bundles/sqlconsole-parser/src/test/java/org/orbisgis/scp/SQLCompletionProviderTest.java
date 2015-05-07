@@ -29,14 +29,9 @@ public class SQLCompletionProviderTest {
         properties.setProperty(OsgiDataSourceFactory.JDBC_URL, RSyntaxSQLParserTest.DATABASE_PATH);
 
         // Create document
-        RSyntaxDocument document = new RSyntaxDocument("sql");
-        RSyntaxTextArea rSyntaxTextArea = new RSyntaxTextArea(document);
-        rSyntaxTextArea.setText("alte");
-        rSyntaxTextArea.setSize(new Dimension(420, 240));
-        rSyntaxTextArea.setCaretPosition(4);
         SQLCompletionProvider autoComplete = new SQLCompletionProvider(dataSourceFactory.createDataSource(properties), true);
 
-        List completions = autoComplete.getCompletionsAtIndex(rSyntaxTextArea, 4);
+        List completions = autoComplete.getCompletionByInputText("alte");
         assertEquals(1, completions.size());
         assertEquals("ALTER", ((Completion)completions.get(0)).getReplacementText());
     }
@@ -51,22 +46,10 @@ public class SQLCompletionProviderTest {
         properties.setProperty(OsgiDataSourceFactory.JDBC_URL, RSyntaxSQLParserTest.DATABASE_PATH);
 
         // Create document
-        RSyntaxDocument document = new RSyntaxDocument("sql");
-        RSyntaxTextArea rSyntaxTextArea = new RSyntaxTextArea(document);
-        rSyntaxTextArea.setText("CREATE TABLE toto as select 1;\n" +
-                "\n" +
-                "create ta");
-        rSyntaxTextArea.setSize(new Dimension(420, 240));
-        rSyntaxTextArea.setCaretPosition(41);
         SQLCompletionProvider autoComplete = new SQLCompletionProvider(dataSourceFactory.createDataSource(properties), true);
 
-        List completions = autoComplete.getCompletionsAtIndex(rSyntaxTextArea, 41);
+        List completions = autoComplete.getCompletionByInputText("CREATE TABLE toto as select 1;\n");
         assertEquals(1, completions.size());
         assertEquals("TABLE ", ((Completion)completions.get(0)).getReplacementText());
-
-        assertEquals("ta", autoComplete.getAlreadyEnteredText(rSyntaxTextArea));
-        rSyntaxTextArea.setText("select the_geom,dim");
-        rSyntaxTextArea.setCaretPosition(rSyntaxTextArea.getDocument().getLength());
-        assertEquals("dim", autoComplete.getAlreadyEnteredText(rSyntaxTextArea));
     }
 }

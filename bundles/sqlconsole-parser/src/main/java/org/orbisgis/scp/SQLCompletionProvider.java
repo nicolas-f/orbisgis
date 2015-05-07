@@ -58,6 +58,8 @@ import org.fife.ui.autocomplete.BasicCompletion;
 import org.fife.ui.autocomplete.Completion;
 import org.fife.ui.autocomplete.CompletionProvider;
 import org.fife.ui.autocomplete.CompletionProviderBase;
+import org.fife.ui.autocomplete.DefaultCompletionProvider;
+import org.fife.ui.autocomplete.ShorthandCompletion;
 import org.h2.bnf.Bnf;
 import org.h2.bnf.RuleHead;
 import org.h2.bnf.RuleList;
@@ -74,7 +76,7 @@ import org.slf4j.LoggerFactory;
  * @author Nicolas Fortin
  * @since 4.0
  */
-public class SQLCompletionProvider extends CompletionProviderBase {
+public class SQLCompletionProvider extends DefaultCompletionProvider {
     private DataSource dataSource;
     private Bnf parser;
     private Logger log = LoggerFactory.getLogger(SQLCompletionProvider.class);
@@ -129,29 +131,13 @@ public class SQLCompletionProvider extends CompletionProviderBase {
 
     @Override
     protected List getCompletionsImpl(JTextComponent comp) {
-        return getCompletionsAtIndex(comp, comp.getCaretPosition());
+        initCompletionAtIndex(comp, comp.getCaretPosition());
+        return super.getCompletionsImpl(comp);
     }
 
-    @Override
-    public String getAlreadyEnteredText(JTextComponent jTextComponent) {
-        int cursorPos = jTextComponent.getCaretPosition();
-        int fetchLength = cursorPos - FETCH_ALREADY_ENTERED_TEXT < 0 ? cursorPos : FETCH_ALREADY_ENTERED_TEXT;
-        try {
-            String words = jTextComponent.getText(Math.max(0, cursorPos - FETCH_ALREADY_ENTERED_TEXT), fetchLength);
-            Matcher m = lastWordPattern.matcher(words);
-            if(m.find()) {
-                return m.group(m.groupCount() - 1);
-            } else {
-                return "";
-            }
-        } catch (BadLocationException ex) {
-            log.error(ex.getLocalizedMessage(), ex);
-            return "";
-        }
-    }
-
-
-    public List<Completion> getCompletionsAtIndex(JTextComponent jTextComponent, int charIndex) {
+    public void initCompletionAtIndex(JTextComponent jTextComponent, int charIndex) {
+        clear();
+        String word = getAlreadyEnteredText(jTextComponent);
         UpdateParserThread fetchingParserTmp = fetchingParser;
         if(fetchingParserTmp != null) {
             if(!fetchingParserTmp.isDone()) {
@@ -159,16 +145,14 @@ public class SQLCompletionProvider extends CompletionProviderBase {
                     // Wait until update is done
                     fetchingParserTmp.get(UPDATE_TIMEOUT, TimeUnit.MILLISECONDS);
                 } catch (Exception ex) {
-                    return new ArrayList<>();
+                    return;
                 }
             } else {
                 parser = fetchingParserTmp.getParser();
             }
         } if(parser == null) {
-            return new ArrayList<>();
+            return;
         }
-        //Completion completion = new BasicCompletion(this, token);
-        List<Completion> completionList = new LinkedList<Completion>();
 
         // Extract the statement at this position
         DocumentSQLReader documentReader = new DocumentSQLReader(jTextComponent.getDocument(), true);
@@ -188,11 +172,11 @@ public class SQLCompletionProvider extends CompletionProviderBase {
             if(!ignoreToken.contains(entry.getValue().toLowerCase())) {
                 Completion completion;
                 if(category == Sentence.FUNCTION) {
-                    completion = new BnfAutoCompletionFunction(this, token + " ", entry.getValue() + " ", dataSource);
+                    completion = new H2FunctionCompletion(this, token, "GEOMETRY");
                 } else {
-                    completion = new BnfAutoCompletion(this, token + " ", entry.getValue() + " ");
+                    completion = new ShorthandCompletion(this, token, category == Sentence.KEYWORD && token.length() > 1 ? token + ' ' : token);
                 }
-                completionList.add(completion);
+                addCompletion(completion);
             }
         }
 
@@ -205,52 +189,11 @@ public class SQLCompletionProvider extends CompletionProviderBase {
                 log.warn("Could not update auto-completion engine", ex);
             }
         }
-        return completionList;
-    }
-
-    @Override
-    public List getCompletionsAt(JTextComponent jTextComponent, Point point) {
-        int pos = jTextComponent.viewToModel(point);
-        if(pos==-1) {
-            return null;
-        } else {
-            return getCompletionsAtIndex(jTextComponent, pos);
-        }
     }
 
     @Override
     public List getParameterizedCompletions(JTextComponent jTextComponent) {
         return null;
-    }
-
-    private static class BnfAutoCompletion extends BasicCompletion {
-        private String append;
-
-        private BnfAutoCompletion(CompletionProvider provider, String completeToken, String append) {
-            super(provider, completeToken);
-            this.append = append;
-        }
-
-        @Override
-        public String getAlreadyEntered(JTextComponent comp) {
-            String completeToken = getReplacementText();
-            return completeToken.substring(0, completeToken.length() - append.length());
-        }
-    }
-
-    private static class BnfAutoCompletionFunction extends BnfAutoCompletion {
-        private DataSource dataSource;
-
-        public BnfAutoCompletionFunction(CompletionProvider provider, String completeToken, String append, DataSource
-                dataSource) {
-            super(provider, completeToken, append);
-            this.dataSource = dataSource;
-        }
-
-        @Override
-        public String toString() {
-            return getReplacementText()+"( GEOMETRY )";
-        }
     }
 
     private static class UpdateParserThread extends SwingWorker<Object, Object> {
